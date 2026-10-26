@@ -1,0 +1,41 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trip Board</title>
+<style>
+:root{--bg:#f6f7fb;--c:#fff;--t:#1b1f2a;--m:#6b7280;--a:#2563eb;--r:#dc2626;--g:#16a34a;--o:#d97706}
+@media(prefers-color-scheme:dark){:root{--bg:#10131a;--c:#1a1f2b;--t:#e8eaf0;--m:#9aa3b2}}
+body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--t)}
+main{max-width:900px;margin:auto;padding:16px}.card{background:var(--c);border-radius:12px;padding:14px;margin:10px 0;box-shadow:0 1px 3px #0002}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>.card{flex:1;min-width:230px}
+input{flex:1;padding:10px;border-radius:8px;border:1px solid #8884;background:var(--c);color:var(--t)}
+button{padding:8px 12px;border:0;border-radius:8px;background:var(--a);color:#fff;cursor:pointer}button.s{background:#8883;color:var(--t)}
+.m{color:var(--m);font-size:13px}.bad{color:var(--r)}.ok{color:var(--g)}.mid{color:var(--o)}
+.badge{background:#fde68a;color:#78350f;padding:2px 8px;border-radius:99px;font-size:12px}
+table{width:100%;border-collapse:collapse}td{padding:3px 6px;border-bottom:1px solid #8882}
+</style><main>
+<h2>🏖️ Trip Board <span class="badge">данные моковые</span></h2>
+<div class="row"><input id="q" placeholder="Хочу к тёплому морю в ноябре, недорого, с ребёнком, без долгих перелётов">
+<button onclick="start()">Найти</button></div><div id="b"></div></main>
+<script>
+let sid="",D={};const $=id=>document.getElementById(id),R=n=>Number(n).toLocaleString("ru")+" ₽";
+const api=async(p,body)=>{const r=await fetch("/api/"+p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid,...body})});return r.json()};
+const set=h=>$("b").insertAdjacentHTML("beforeend",h);
+async function start(){const r=await api("start",{text:$("q").value});sid=r.sid;$("b").innerHTML="";
+ set(`<div class="card"><b>Что я понял:</b> ${r.state.nights} ноч., ${r.state.adults} взр.${r.state.kids?`, ${r.state.kids} дет.`:""}, бюджет ${R(r.state.budget)}${r.state.dog?", с собакой":""}
+ <div class="m">Допущения (поправьте в следующем сообщении): ${r.assume.join("; ")||"нет"}</div></div><div class="row">`+
+ r.top.map(d=>`<div class="card"><b>${d.name}</b>, ${d.country} <span class="badge">${d.score}/100</span><p class="m">${d.why}</p><button onclick="sel('${d.name}')">Выбрать</button></div>`).join("")+"</div>")}
+async function sel(n){const r=await api("select",{dest:n});D=r.packs;
+ set(`<h3>${n}: три варианта</h3><div class="row">`+Object.entries(r.packs).map(([k,p])=>`<div class="card"><b>${p.label}</b> — ${R(p.total)}
+ <p>${p.why.join("<br>")}</p><p class="m">Чем пожертвовали: ${p.sacrifice.join("; ")}</p>
+ <p class="${p.issues.length?"bad":"ok"} m">${p.issues.length?"Рисков: "+p.issues.length:"Состыковки ок"}</p><button onclick="ch('${k}')">Собрать</button></div>`).join("")+"</div>")}
+function plan(r,extra=""){const p=r.plan;$("b").insertAdjacentHTML("beforeend",extra);
+ $("pl")&&$("pl").remove();set(`<div class="card" id="pl"><h3>План: ${r.dest} — ${p.label}</h3>
+ <p>${p.hotel.name}, ${R(p.hotel.price)}/ночь · рейс ${p.flight.dep_s}→${p.flight.arr_s} · ${R(p.flight.price)}/чел<br>${p.extras.map(e=>`+ ${e.name} ${R(e.price)}`).join("<br>")}</p>
+ <h3>Итого ${R(p.total)}</h3>`+(p.issues.length?"<b>Валидатор нашёл:</b>":'<b class="ok">✓ Все состыковки проверены</b>')+
+ p.issues.map(i=>`<p class="${i.sev=="high"?"bad":"mid"}">⚠ ${i.msg}<br><button class="s" onclick="fix('${i.code}')">${i.fix}</button></p>`).join("")+
+ `<div class="row"><input id="rp" placeholder="а если на 2 дня позже? / бюджет меньше / с нами собака"><button class="s" onclick="rep()">Пересобрать</button><button onclick="pay()">Оплатить (имитация)</button></div></div>`)}
+async function ch(k){plan(await api("choose",{kind:k}))}
+async function fix(c){plan(await api("fix",{code:c}))}
+async function rep(){const r=await api("replan",{text:$("rp").value});
+ plan(r,`<div class="card"><b>Пересборка:</b> ${r.changes.join(", ")||"без изменений"}<table>${r.diff.map(d=>`<tr><td>${d.what}</td><td>${d.old}</td><td>→ <b>${d.new}</b></td></tr>`).join("")}</table></div>`)}
+async function pay(){const r=await api("pay",{});set(`<div class="card ok"><h3>✓ Заказ ${r.order} оформлен (имитация)</h3></div>`)}
+</script></html>
